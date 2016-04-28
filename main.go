@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"crypto/tls"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -44,20 +42,8 @@ func NewProxy(transport http.RoundTripper, skipSslValidation bool) http.Handler 
 	reverseProxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			forwardedURL := req.Header.Get(CF_FORWARDED_URL_HEADER)
-			sigHeader := req.Header.Get(CF_PROXY_SIGNATURE_HEADER)
 
-			body, err := ioutil.ReadAll(req.Body)
-			if err != nil {
-				log.Fatalln(err.Error())
-			}
-			req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
-
-			logRequest(forwardedURL, sigHeader, string(body), req.Header, skipSslValidation)
-
-			err = sleep()
-			if err != nil {
-				log.Fatalln(err.Error())
-			}
+			logRequest(req.Header, skipSslValidation)
 
 			// Note that url.Parse is decoding any url-encoded characters.
 			url, err := url.Parse(forwardedURL)
@@ -67,21 +53,21 @@ func NewProxy(transport http.RoundTripper, skipSslValidation bool) http.Handler 
 
 			req.URL = url
 			req.Host = url.Host
+			delayRequest(req)
 		},
-		Transport: transport,
+		Transport:     transport,
+		FlushInterval: 50 * time.Millisecond,
 	}
+
 	return reverseProxy
 }
 
-func logRequest(forwardedURL, sigHeader, body string, headers http.Header, skipSslValidation bool) {
+func logRequest(headers http.Header, skipSslValidation bool) {
 	log.Printf("Skip ssl validation set to %t", skipSslValidation)
 	log.Println("Received request: ")
-	log.Printf("%s: %s\n", CF_FORWARDED_URL_HEADER, forwardedURL)
-	log.Printf("%s: %s\n", CF_PROXY_SIGNATURE_HEADER, sigHeader)
 	log.Println("")
 	log.Printf("Headers: %#v\n", headers)
 	log.Println("")
-	log.Printf("Request Body: %s\n", body)
 }
 
 type LoggingRoundTripper struct {
@@ -98,42 +84,18 @@ func NewLoggingRoundTripper(skipSslValidation bool) *LoggingRoundTripper {
 }
 
 func (lrt *LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	var err error
-	var res *http.Response
-
-	log.Printf("Forwarding to: %s\n", request.URL.String())
-	res, err = lrt.transport.RoundTrip(request)
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-	log.Println("")
-	log.Printf("Response Headers: %#v\n", res.Header)
-	log.Println("")
-	log.Printf("Response Body: %s\n", string(body))
-	log.Println("")
-	res.Body = ioutil.NopCloser(bytes.NewBuffer(body))
-
-	log.Println("Sending response to GoRouter...")
-
-	return res, err
+	return lrt.transport.RoundTrip(request)
 }
 
-func sleep() error {
-	sleepMilliString := os.Getenv("ROUTE_SERVICE_SLEEP_MILLI")
-	if sleepMilliString != "" {
-		sleepMilli, err := strconv.ParseInt(sleepMilliString, 0, 64)
-		if err != nil {
-			return err
-		}
-
-		log.Printf("Sleeping for %d milliseconds\n", sleepMilli)
-		time.Sleep(time.Duration(sleepMilli) * time.Millisecond)
-
+func delayRequest(req *http.Request) {
+	if req.URL.Path == "/routing/v1/tcp_routes" {
+		sleep()
 	}
-	return nil
+}
+
+func sleep() {
+	sleepMilliString := os.Getenv("ROUTE_SERVICE_SLEEP_MILLI")
+	sleepMilli, _ := strconv.ParseInt(sleepMilliString, 0, 64)
+	log.Printf("Sleeping for %d milliseconds\n", sleepMilli)
+	time.Sleep(time.Duration(sleepMilli) * time.Millisecond)
 }
