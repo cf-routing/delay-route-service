@@ -32,7 +32,7 @@ func main() {
 	}
 	log.SetOutput(os.Stdout)
 
-	roundTripper := NewLoggingRoundTripper(skipSslValidation)
+	roundTripper := NewDelayRoundTripper(skipSslValidation)
 	proxy := NewProxy(roundTripper, skipSslValidation)
 
 	log.Fatal(http.ListenAndServe(":"+port, proxy))
@@ -70,21 +70,26 @@ func logRequest(headers http.Header, skipSslValidation bool) {
 	log.Println("")
 }
 
-type LoggingRoundTripper struct {
+type DelayRoundTripper struct {
 	transport http.RoundTripper
 }
 
-func NewLoggingRoundTripper(skipSslValidation bool) *LoggingRoundTripper {
+func NewDelayRoundTripper(skipSslValidation bool) http.RoundTripper {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipSslValidation},
 	}
-	return &LoggingRoundTripper{
+	return &DelayRoundTripper{
 		transport: tr,
 	}
 }
 
-func (lrt *LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	return lrt.transport.RoundTrip(request)
+func (lrt *DelayRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	res, err := lrt.transport.RoundTrip(request)
+	if request.URL.Path == "/routing/v1/tcp_routes" {
+		sleep()
+	}
+
+	return res, err
 }
 
 func delayRequest(req *http.Request) {
