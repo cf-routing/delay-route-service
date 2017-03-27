@@ -84,10 +84,11 @@ func NewDelayRoundTripper(skipSslValidation bool) http.RoundTripper {
 }
 
 func (lrt *DelayRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	sleep()
 	res, err := lrt.transport.RoundTrip(request)
-	if request.URL.Path == "/routing/v1/tcp_routes" {
-		sleep()
-	}
+	log.Printf("Request has completed %#v\n", res)
+	// if request.URL.Path == "/routing/v1/tcp_routes" {
+	// }
 
 	return res, err
 }
@@ -99,8 +100,8 @@ func delayRequest(req *http.Request) {
 }
 
 func sleep() {
-	sleepMilliString := os.Getenv("ROUTE_SERVICE_SLEEP_MILLI")
-	sleepMilli, _ := strconv.ParseInt(sleepMilliString, 0, 64)
-	log.Printf("Sleeping for %d milliseconds\n", sleepMilli)
-	time.Sleep(time.Duration(sleepMilli) * time.Millisecond)
+	// sleepMilliString := os.Getenv("ROUTE_SERVICE_SLEEP_MILLI")
+	// sleepMilli, _ := strconv.ParseInt(sleepMilliString, 0, 64)
+	log.Printf("Sleeping for %d milliseconds\n", 30)
+	time.Sleep(time.Duration(30) * time.Second)
 }
