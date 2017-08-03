@@ -70,6 +70,15 @@ func NewProxy(transport http.RoundTripper, skipSslValidation bool) http.Handler 
 
 			req.URL = url
 			req.Host = url.Host
+			newPath := os.Getenv("REQ_PATH")
+			if newPath != "" {
+				req.URL.Path = newPath
+			}
+			newHost := os.Getenv("REQ_HOST")
+			if newHost != "" {
+				req.Host = newHost
+			}
+
 		},
 		Transport: transport,
 	}
