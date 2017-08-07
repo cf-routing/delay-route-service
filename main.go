@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/cloudfoundry-samples/logging-route-service/format"
 )
 
 const (
@@ -67,17 +70,20 @@ func NewProxy(transport http.RoundTripper, skipSslValidation bool) http.Handler 
 			if err != nil {
 				log.Fatalln(err.Error())
 			}
-
-			req.URL = url
-			req.Host = url.Host
+			var newUrl string
 			newPath := os.Getenv("REQ_PATH")
-			if newPath != "" {
-				req.URL.Path = newPath
-			}
 			newHost := os.Getenv("REQ_HOST")
-			if newHost != "" {
-				req.Host = newHost
+			if newPath != "" && newHost != "" {
+				newUrl = fmt.Sprintf("http://%s/%s", newHost, newPath)
 			}
+
+			reqUrl, err := url.Parse(newUrl)
+			if err != nil {
+				log.Fatalln(err.Error())
+			}
+
+			req.URL = reqUrl
+			req.Host = reqUrl.Host
 
 		},
 		Transport: transport,
@@ -114,6 +120,7 @@ func (lrt *LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response
 	var res *http.Response
 
 	log.Printf("Forwarding to: %s\n", request.URL.String())
+	log.Println("Full request: ", format.Object(request, 1))
 	res, err = lrt.transport.RoundTrip(request)
 	if err != nil {
 		return nil, err
