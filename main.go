@@ -12,8 +12,6 @@ import (
 	"os"
 	"strconv"
 	"time"
-
-	"github.com/cloudfoundry-samples/logging-route-service/format"
 )
 
 const (
@@ -26,6 +24,7 @@ func main() {
 	var (
 		port              string
 		skipSslValidation bool
+		useTLS            bool
 		err               error
 	)
 
@@ -35,12 +34,20 @@ func main() {
 	if skipSslValidation, err = strconv.ParseBool(os.Getenv("SKIP_SSL_VALIDATION")); err != nil {
 		skipSslValidation = true
 	}
+
+	if useTLS, err = strconv.ParseBool(os.Getenv("USE_TLS")); err != nil {
+		useTLS = false
+	}
 	log.SetOutput(os.Stdout)
 
 	roundTripper := NewLoggingRoundTripper(skipSslValidation)
 	proxy := NewProxy(roundTripper, skipSslValidation)
 
-	log.Fatal(http.ListenAndServe(":"+port, proxy))
+	if useTLS {
+		log.Fatal(http.ListenAndServeTLS(":"+port, "certs/server.crt", "certs/server.key", proxy))
+	} else {
+		log.Fatal(http.ListenAndServe(":"+port, proxy))
+	}
 }
 
 func NewProxy(transport http.RoundTripper, skipSslValidation bool) http.Handler {
@@ -70,21 +77,27 @@ func NewProxy(transport http.RoundTripper, skipSslValidation bool) http.Handler 
 			if err != nil {
 				log.Fatalln(err.Error())
 			}
-			var newUrl string
+			var newUrl, host, path string
+			path = url.Path
+			host = url.Host
 			newPath := os.Getenv("REQ_PATH")
 			newHost := os.Getenv("REQ_HOST")
-			if newPath != "" && newHost != "" {
-				newUrl = fmt.Sprintf("http://%s/%s", newHost, newPath)
+			if newPath != "" {
+				path = newPath
+			}
+			if newHost != "" {
+				host = newHost
 			}
 
+			newUrl = fmt.Sprintf("http://%s/%s", host, path)
 			reqUrl, err := url.Parse(newUrl)
+			fmt.Println("url", reqUrl.String())
 			if err != nil {
 				log.Fatalln(err.Error())
 			}
 
 			req.URL = reqUrl
 			req.Host = reqUrl.Host
-
 		},
 		Transport: transport,
 	}
@@ -120,7 +133,6 @@ func (lrt *LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response
 	var res *http.Response
 
 	log.Printf("Forwarding to: %s\n", request.URL.String())
-	log.Println("Full request: ", format.Object(request, 1))
 	res, err = lrt.transport.RoundTrip(request)
 	if err != nil {
 		return nil, err

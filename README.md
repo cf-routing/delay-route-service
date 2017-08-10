@@ -45,3 +45,39 @@ Example:
 cf set-env logging-route-service SKIP_SSL_VALIDATION false
 cf restart logging-route-service
 ```
+
+### REQ_HOST
+
+If you set this environment variable to a specific host, the route service
+will forward the request to that host. By default the route service will forward the request to host present in X-CF-Forwarded-Url.
+
+Example:
+
+```sh
+cf set-env logging-route-service REQ_HOST my_app.com
+cf restart logging-route-service
+```
+
+### REQ_PATH
+
+If you set this environment variable to a specific path, the route service
+will forward the request to that path. By default the route service will forward the request to host and path present in X-CF-Forwarded-Url.
+
+Example:
+
+```sh
+cf set-env logging-route-service REQ_PATH /test_handler
+cf restart logging-route-service
+```
+
+### USE_TLS
+
+If you set this environment variable to true, the route service
+will create a TLS Listener. You will also need to provide a certificate in `certs/server.crt` and a key in `certs/server.key`. By default the route service will create HTTP Listener.
+
+Example:
+
+```sh
+cf set-env logging-route-service USE_TLS true
+cf restart logging-route-service
+```
